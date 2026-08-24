@@ -87,7 +87,7 @@ if ((Test-Path $llamaServerExe) -and -not $Force) {
     Write-Info "llama-server.exe already exists, skipping. (use -Force to re-download)" "已存在 llama-server.exe，跳过（-Force 强制重下）"
 } else {
     $zip = Join-Path $env:TEMP "llama-b10566-bin-win-cuda-13.3-x64.zip"
-    $curlArgs = @("-L", "-C", "-", "--retry", "5", "--retry-all-errors", "-o", $zip, $LlamaCppUrl)
+    $curlArgs = @("-L", "-C", "-", "--retry", "5", "--retry-all-errors", "--fail", "-o", $zip, $LlamaCppUrl)
     if ($Proxy) { $curlArgs = @("-x", $Proxy) + $curlArgs }
     & curl.exe @curlArgs
     if ($LASTEXITCODE -ne 0) { Write-Error "llama.cpp download failed (exit $LASTEXITCODE). / 引擎下载失败。" }
@@ -105,11 +105,11 @@ if ($SkipModel) {
 } elseif ((Test-Path $modelFile) -and -not $Force) {
     Write-Info "Model already exists, skipping. (use -Force to re-download)" "已存在模型文件，跳过（-Force 强制重下）"
 } else {
-    $curlArgs = @("-L", "-C", "-", "--retry", "5", "--retry-all-errors", "-o", $modelFile, $ModelUrl)
+    $curlArgs = @("-L", "-C", "-", "--retry", "5", "--retry-all-errors", "--fail", "-o", $modelFile, $ModelUrl)
     if ($Proxy) { $curlArgs = @("-x", $Proxy) + $curlArgs }
     & curl.exe @curlArgs
     if ($LASTEXITCODE -ne 0) { Write-Error "Model download failed (exit $LASTEXITCODE). / 模型下载失败。" }
-    $sizeGB = [math]::Round((Get-Item $modelFile).Length / 1GB, 2)
+    $sizeGB = [math]::Round((Get-Item $modelFile).Length / 1e9, 2)
     Write-Info "Downloaded: $sizeGB GB" "下载完成：$sizeGB GB"
     if ($sizeGB -lt 15) {
         Write-Host "  [WARN] Model file is only $sizeGB GB (expected ~16.35 GB). The download may be incomplete; re-run with -Force to re-download. / 警告：模型文件仅 $sizeGB GB（预期约 16.35 GB），下载可能不完整；请用 -Force 重新下载。" -ForegroundColor Yellow
@@ -124,7 +124,7 @@ else { Write-Info "llama.cpp: OK" "引擎：OK" }
 if (-not $SkipModel) {
     if (-not (Test-Path $modelFile)) { Write-Host "  [FAIL] model missing / 缺少模型文件" -ForegroundColor Red; $ok = $false }
     else {
-        $modelSizeGB = [math]::Round((Get-Item $modelFile).Length / 1GB, 2)
+        $modelSizeGB = [math]::Round((Get-Item $modelFile).Length / 1e9, 2)
         Write-Info "model: $modelSizeGB GB" "模型：$modelSizeGB GB"
         if ($modelSizeGB -lt 15) { Write-Host "  [WARN] model size $modelSizeGB GB is below expected ~16.35 GB / 警告：模型大小 $modelSizeGB GB 低于预期约 16.35 GB" -ForegroundColor Yellow }
     }
