@@ -15,19 +15,19 @@ if ($existing) {
 
 Write-Host "Starting llama-server..." -ForegroundColor Cyan
 Write-Host "  Model: $modelFile" -ForegroundColor Gray
-Write-Host "  Context: 128K, KV q8_0, Flash Attention, GPU offload, MTP spec, reasoning preserved, threads 8" -ForegroundColor Gray
+Write-Host "  Context: 128K, KV q8_0, Flash Attention, GPU offload (all layers), MTP spec, ubatch 1024, no reasoning preserve, threads 8" -ForegroundColor Gray
 Write-Host "  Sampling (Qwen3.8-27B thinking mode): temp 1.0, top_p 0.95, top_k 20, min_p 0" -ForegroundColor Gray
 
 & $serverExe `
   -m $modelFile `
-  -c 131072 -fa 1 `
+  -c 131072 --flash-attn on `
   --cache-type-k q8_0 --cache-type-v q8_0 `
   --no-mmproj --parallel 1 `
-  -ngl 99 `
-  -t 8 `
+  -ngl all --no-host`
+  -t 8 -ub 1024`
   --spec-type draft-mtp `
   --spec-draft-poll 100 `
-  --reasoning-preserve `
+  --no-reasoning-preserve `
   --load-mode mmap+mlock `
   --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0 `
   --presence-penalty 0.0 --repeat-penalty 1.0 `

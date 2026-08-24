@@ -66,14 +66,14 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 `start-server.ps1` 使用以下参数（均已验证）：
 
 ```
--c 131072 -fa 1
+-c 131072 --flash-attn on
 --cache-type-k q8_0 --cache-type-v q8_0
 --no-mmproj --parallel 1
--ngl 99
--t 8
+-ngl all --no-host
+-t 8 -ub 1024
 --spec-type draft-mtp
 --spec-draft-poll 100
---reasoning-preserve
+--no-reasoning-preserve
 --load-mode mmap+mlock
 --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
 --presence-penalty 0.0 --repeat-penalty 1.0
@@ -81,11 +81,14 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 
 | 参数 | 原因 |
 |---|---|
-| `--spec-type draft-mtp` | 模型自带 MTP 头作草稿；无损提速 30–65%。默认 `--spec-draft-n-max 3` 最优（8 反而更慢） |
+| `--spec-type draft-mtp` | 模型自带 MTP 头作草稿；无损提速 30–65%。默认 `--spec-draft-n-max 3` 最优（4/8 均更慢） |
+| `-ub 1024` | 短上下文 prefill **+4~5%**（936/964 vs 866/915 tok/s）；已验证不影响长上下文 prefill 与解码 |
+| `-ngl all` | 全部 65 层（含 MTP 头）进显存（内部解析为 -2；本模型上与 99 等效，更健壮） |
+| `--no-host` | 跳过 host buffer，释放额外设备缓冲；已验证无回归 |
 | `-t 8` | 显式 8 个 CPU 线程（给其他应用留 CPU 余量；自动检测在其他机器上可能用满逻辑核） |
 | `-c 131072` + KV q8_0 | 速度优先的稳定组合；160K/196K 在此卡上不稳定（见 FAQ） |
 | `--spec-draft-poll 100` | 异步草稿轮询，隐藏草稿延迟；想省 CPU 可降到 50 |
-| `--reasoning-preserve` | 历史中保留思考痕迹，长会话更连贯 |
+| `--no-reasoning-preserve` | **显式**关闭历史思考痕迹保留。模板默认会保留、且 opencode 无条件回传 `reasoning_content`——只有该参数能真正丢弃思考链：会话更长、每轮增量 prefill 更快。当前轮思考仍正常流式输出 |
 | `--load-mode mmap+mlock` | 16.35 GB 权重常驻内存，防止换页重读 |
 | 采样参数 | Qwen3.8-27B 官方**思考模式**推荐值（temp 1.0 / top_p 0.95 / top_k 20 / min_p 0） |
 | `--temp 1.0` | 注意：温度越低 MTP 接受率越高、速度越快（temp 0 约 42–53 tok/s，temp 1.0 约 38 tok/s） |
@@ -107,13 +110,13 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 
 | 场景 | 结果 |
 |---|---|
-| Prompt 处理（2K / 4K 未缓存） | 863–917 tok/s |
-| 生成（短上下文，temp 1.0） | 34–42 tok/s（均值 ~38，MTP 开启） |
+| Prompt 处理（2K / 4K 未缓存） | 936 / 964 tok/s |
+| 生成（短上下文，temp 1.0） | 34–48 tok/s（MTP 开启，波动来自接受率） |
 | 生成（temp 0 贪婪） | ~41.7 tok/s（代码类最高 52.7） |
-| 生成 @64K 上下文 | ~28 tok/s |
-| 生成 @128K 上下文 | ~26–32 tok/s（波动来自 MTP 接受率） |
+| 生成 @64K 上下文 | ~27 tok/s |
+| 生成 @128K 上下文 | ~23–28 tok/s（波动来自 MTP 接受率） |
 | TTFT（短 prompt） | 0.2–0.4 s |
-| TTFT @64K / @128K | ~60 s / ~145 s |
+| TTFT @64K / @128K（真 64K/128K） | ~86 s / ~218 s |
 | 显存 | 23.3 / 24.6 GiB |
 | MTP 接受率 | temp 0：55–75%；temp 1.0：48–62% |
 
@@ -147,12 +150,12 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 
 ## 已知问题与经验教训
 
-1. **显存余量 <1.5 GB 时不要调 `-ub`（ubatch）超过 512** —— CUDA graph 捕获会静默失败，速度暴跌约 7 倍且无任何报错。
-2. **保持 ≥1.5 GB 显存余量** —— 160K 上下文 / V q4_0 KV / `-ub 2048+` 在此卡上都会触发慢路径。
+1. **`-ub 1024` 在此卡上安全**（实测余量 0.8 GB 下正常，短上下文 prefill +4~5%）；但**余量 <1.5 GB 时 `-ub 2048+` 会静默失败**——CUDA graph 捕获失败，速度暴跌约 7 倍且无任何报错。
+2. **KV 必须保持 `q8_0`**——`q4_0`/`iq4_nl` KV 在 qwen35 上是**慢路径**（注意力内核不支持 CUDA graph），与显存余量无关：实测余量 2.5 GB 时仍只有 112/66 tok/s。此前"余量不足"的诊断是误判。
 3. **`ngram-simple` 投机解码在此环境是净损失**（CPU +27%、显存 +0.5 GB、128K 生成退化）——单独 MTP 更好。
 4. **MTP 头默认被当作"unused tensor"忽略** —— 只有 `--spec-type draft-mtp` 才会激活它。
-5. **`--spec-draft-n-max 8` 比默认 3 更差** —— 自由文本下草稿开销超过长链收益。
-6. **长上下文 TTFT 才是真正的瓶颈**（128K 约 145 s）——prefill 受带宽限制，密集/混合模型没有 CPU 侧解法。
+5. **`--spec-draft-n-max` 4 和 8 都比默认 3 更差** —— 自由文本下草稿开销超过长链收益。
+6. **长上下文 TTFT 才是真正的瓶颈**（真 128K 约 218 s）——prefill 受带宽限制，密集/混合模型没有 CPU 侧解法。（此前的 ~145 s 数据来自旧版 benchmark 的 token 估算 4.0 字符/token，实际只有 ~93K 上下文。）
 7. **`reasoning_effort` 可按请求设置** —— API 侧已验证（`"none"` 完全关闭思考，思考块 31→0）。
 
 ## License

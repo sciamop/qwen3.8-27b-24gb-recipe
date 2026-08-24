@@ -66,14 +66,14 @@ Server endpoint: `http://127.0.0.1:8080/v1` (OpenAI-compatible).
 `start-server.ps1` runs with the following (all parameters validated):
 
 ```
--c 131072 -fa 1
+-c 131072 --flash-attn on
 --cache-type-k q8_0 --cache-type-v q8_0
 --no-mmproj --parallel 1
--ngl 99
--t 8
+-ngl all --no-host
+-t 8 -ub 1024
 --spec-type draft-mtp
 --spec-draft-poll 100
---reasoning-preserve
+--no-reasoning-preserve
 --load-mode mmap+mlock
 --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
 --presence-penalty 0.0 --repeat-penalty 1.0
@@ -81,11 +81,14 @@ Server endpoint: `http://127.0.0.1:8080/v1` (OpenAI-compatible).
 
 | Parameter | Why |
 |---|---|
-| `--spec-type draft-mtp` | Model's own MTP head as draft; lossless 30–65% faster generation. Default `--spec-draft-n-max 3` is optimal (8 was slower). |
+| `--spec-type draft-mtp` | Model's own MTP head as draft; lossless 30–65% faster generation. Default `--spec-draft-n-max 3` is optimal (4/8 were slower). |
+| `-ub 1024` | Short-context prefill **+4–5%** (936/964 vs 866/915 tok/s); verified no effect on long-context prefill or decode. |
+| `-ngl all` | All 65 layers incl. the MTP head into VRAM (parses to `-2` internally; equivalent to `99` on this model, more robust). |
+| `--no-host` | Bypass host buffer, freeing extra device buffers. Verified no regressions. |
 | `-t 8` | Explicit 8 CPU threads (leaves CPU headroom for other apps; auto-detect may use all logical cores on other machines). |
 | `-c 131072` + KV q8_0 | Speed-first stable combo. 160K/196K contexts are unstable on this GPU (see FAQ). |
 | `--spec-draft-poll 100` | Async draft polling; hides draft latency. Lower to 50 to save CPU. |
-| `--reasoning-preserve` | Keep thinking traces in history for better long-session continuity. |
+| `--no-reasoning-preserve` | **Explicitly** drop thinking traces from the history. The template default *keeps* them and opencode always sends `reasoning_content` back, so this flag is the only way to actually drop them — longer sessions, faster incremental prefill. Current-round thinking still streams normally. |
 | `--load-mode mmap+mlock` | Pin 16.35 GB weights in RAM (no page-out re-reads). |
 | Sampling | Official Qwen3.8-27B **thinking mode** values (temp 1.0 / top_p 0.95 / top_k 20 / min_p 0). |
 | `--temp 1.0` | Note: lower temperature = higher MTP acceptance = faster (temp 0 → ~42–53 tok/s vs ~38 @ temp 1.0). |
@@ -107,13 +110,13 @@ Hardware: RTX A5000 (24564 MiB), Ryzen 7 5800X, DDR4-3600, llama.cpp b10566, `be
 
 | Scenario | Result |
 |---|---|
-| Prompt eval (2K / 4K, uncached) | 863–917 tok/s |
-| Generation (short context, temp 1.0) | 34–42 tok/s (avg ~38, MTP on) |
+| Prompt eval (2K / 4K, uncached) | 936 / 964 tok/s |
+| Generation (short context, temp 1.0) | 34–48 tok/s (MTP on; variance from acceptance) |
 | Generation (temp 0 / greedy) | ~41.7 tok/s (code up to 52.7) |
-| Generation @64K context | ~28 tok/s |
-| Generation @128K context | ~26–32 tok/s (variance from MTP acceptance) |
+| Generation @64K context | ~27 tok/s |
+| Generation @128K context | ~23–28 tok/s (variance from MTP acceptance) |
 | TTFT (short prompt) | 0.2–0.4 s |
-| TTFT @64K / @128K | ~60 s / ~145 s |
+| TTFT @64K / @128K (true 64K/128K) | ~86 s / ~218 s |
 | VRAM | 23.3 / 24.6 GiB |
 | MTP acceptance | temp 0: 55–75%; temp 1.0: 48–62% |
 
@@ -148,12 +151,12 @@ and `reasoning_budget_tokens` — verified working via the API.
 
 ## Known Issues & Lessons Learned
 
-1. **Do NOT raise `-ub` (ubatch) above 512** with <1.5 GB VRAM headroom — CUDA graph capture silently fails and speed collapses ~7x with no error message.
-2. **Keep ≥1.5 GB VRAM headroom** — 160K context / V q4_0 KV / `-ub 2048+` all triggered the slow path on this card.
+1. **`-ub 1024` is safe on this card (measured 0.8 GB headroom)** — short-context prefill +4–5%. But `-ub 2048+` with <1.5 GB headroom silently fails CUDA graph capture (~7x slower, no error message).
+2. **KV stays `q8_0` — `q4_0`/`iq4_nl` KV is a slow path on qwen35** (attention kernels lack CUDA-graph support), regardless of VRAM headroom — measured 112/66 tok/s even with 2.5 GB free. Earlier diagnosis blaming headroom was wrong.
 3. **`ngram-simple` spec decoding was a net loss** here (CPU +27%, VRAM +0.5GB, 128K generation regressed) — MTP alone is better.
 4. **MTP head is loaded as "unused tensor" by default** — only `--spec-type draft-mtp` activates it.
-5. **`--spec-draft-n-max 8` is worse than default 3** — draft overhead exceeds the longer-chain benefit on freeform text.
-6. **Long-context TTFT is the real bottleneck** (~145 s @128K) — prefill is bandwidth-bound; no CPU-side fix exists for dense/hybrid models.
+5. **`--spec-draft-n-max` 4 and 8 are both worse than default 3** — draft overhead exceeds the longer-chain benefit on freeform text.
+6. **Long-context TTFT is the real bottleneck** (~218 s @ true 128K) — prefill is bandwidth-bound; no CPU-side fix exists for dense/hybrid models. (Earlier ~145 s figure came from the old benchmark token estimate of 4.0 chars/token, i.e. only ~93K context.)
 7. **`reasoning_effort` is settable per request** — API-side verified (`"none"` disables thinking entirely, 31→0 reasoning chunks).
 
 ## License
