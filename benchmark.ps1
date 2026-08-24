@@ -111,4 +111,5 @@ Write-Host ("  generation : run1 {0:N1} tok/s   run2 {1:N1} tok/s" -f $r3a.timin
 Write-Host ("  generation @64K ctx: {0:N1} tok/s (draft {1:N0}/{2:N0})" -f $r4.timings.predicted_per_second, $r4.timings.draft_n_accepted, $r4.timings.draft_n)
 Write-Host ("  generation @128K ctx: {0:N1} tok/s (draft {1:N0}/{2:N0})" -f $r5.timings.predicted_per_second, $r5.timings.draft_n_accepted, $r5.timings.draft_n)
 Write-Host ("  TTFT       : run1 {0:N2} s   run2 {1:N2} s   64K: {2:N2} s   128K: {3:N2} s" -f $r3a.ttft, $r3b.ttft, $r4.ttft, $r5.ttft)
+Write-Host ("  prompt_n   : run1 {0}   64K {1}   128K {2}   (actual token counts)" -f $r3a.timings.prompt_n, $r4.timings.prompt_n, $r5.timings.prompt_n)
 nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv,noheader
