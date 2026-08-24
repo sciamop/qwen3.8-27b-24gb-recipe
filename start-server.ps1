@@ -23,8 +23,8 @@ Write-Host "  Sampling (Qwen3.8-27B thinking mode): temp 1.0, top_p 0.95, top_k 
   -c 131072 --flash-attn on `
   --cache-type-k q8_0 --cache-type-v q8_0 `
   --no-mmproj --parallel 1 `
-  -ngl all --no-host`
-  -t 8 -ub 1024`
+  -ngl all --no-host `
+  -t 8 -ub 1024 `
   --spec-type draft-mtp `
   --spec-draft-poll 100 `
   --no-reasoning-preserve `
