@@ -47,7 +47,7 @@ A complete, battle-tested recipe for running **Qwen3.8-27B** locally on **any 24
 
 ### Option B: Manual
 
-1. **llama.cpp** (b10566, CUDA 13.3): <https://github.com/ggml-org/llama.cpp/releases/download/b10566/llama-b10566-bin-win-cuda-13.3-x64.zip>
+1. **llama.cpp** (b10621, CUDA 13.3): <https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-cuda-13.3-x64.zip>
    - extract into `llama-cpp/`
    - Note: the CUDA 12.4 build ships without `cudart64_12.dll`/`cublas64_12.dll` and silently falls back to CPU — use the **CUDA 13.3** build.
 2. **Model**: `Qwen3.8-27B-UD-Q4_K_XL.gguf` (16.35 GB) from <https://huggingface.co/unsloth/Qwen3.8-27B-GGUF> → place in `models/`
@@ -72,8 +72,9 @@ Server endpoint: `http://127.0.0.1:8080/v1` (OpenAI-compatible).
 -ngl all --no-host
 -t 8 -ub 1024
 --spec-type draft-mtp
---spec-draft-poll 100
+--spec-draft-poll 1
 --no-reasoning-preserve
+--reasoning-effort medium
 --load-mode mmap+mlock
 --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
 --presence-penalty 0.0 --repeat-penalty 1.0
@@ -87,8 +88,9 @@ Server endpoint: `http://127.0.0.1:8080/v1` (OpenAI-compatible).
 | `--no-host` | Bypass host buffer, freeing extra device buffers. Verified no regressions. |
 | `-t 8` | Explicit 8 CPU threads (leaves CPU headroom for other apps; auto-detect may use all logical cores on other machines). |
 | `-c 131072` + KV q8_0 | Speed-first stable combo. 160K/196K contexts are unstable on this GPU (see FAQ). |
-| `--spec-draft-poll 100` | Async draft polling; hides draft latency. Lower to 50 to save CPU. |
+| `--spec-draft-poll 1` | Enable async draft polling (hides draft latency). Bool flag (`0`/`1`); active polling level follows `--poll`. |
 | `--no-reasoning-preserve` | **Explicitly** drop thinking traces from the history. The template default *keeps* them and opencode always sends `reasoning_content` back, so this flag is the only way to actually drop them — longer sessions, faster incremental prefill. Current-round thinking still streams normally. |
+| `--reasoning-effort medium` | Server default thinking depth (was template default `xhigh`). Shorter thinking = less latency per turn. Overridable per request via `reasoning_effort`. |
 | `--load-mode mmap+mlock` | Pin 16.35 GB weights in RAM (no page-out re-reads). |
 | Sampling | Official Qwen3.8-27B **thinking mode** values (temp 1.0 / top_p 0.95 / top_k 20 / min_p 0). |
 | `--temp 1.0` | Note: lower temperature = higher MTP acceptance = faster (temp 0 → ~42–53 tok/s vs ~38 @ temp 1.0). |
@@ -106,7 +108,7 @@ Server endpoint: `http://127.0.0.1:8080/v1` (OpenAI-compatible).
 
 ## Benchmark
 
-Hardware: RTX A5000 (24564 MiB), Ryzen 7 5800X, DDR4-3600, llama.cpp b10566, `benchmark.ps1`.
+Hardware: RTX A5000 (24564 MiB), Ryzen 7 5800X, DDR4-3600, llama.cpp b10621, `benchmark.ps1`.
 
 | Scenario | Result |
 |---|---|
@@ -138,16 +140,22 @@ Baseline without MTP: ~32 tok/s. **MTP gain: +30–65%.**
           "name": "Qwen3.8-27B (Local)",
           "tool_call": true,
           "reasoning": true,
-          "limit": { "context": 131072, "output": 65536 }
+          "limit": { "context": 131072, "input": 131072, "output": 65536 }
         }
       }
     }
+  },
+  // compact ~16K tokens before the 128K hard limit (opencode defaults to ~32K headroom)
+  "compaction": { "reserved": 16000 },
+  // optional: delegate compaction to a cloud model instead of the local GPU
+  "agent": {
+    "compaction": { "model": "deepseek/deepseek-v4-flash" }
   }
 }
 ```
 
-The server also accepts `reasoning_effort` per request (`low`/`medium`/`high`/`xhigh`/`none`),
-and `reasoning_budget_tokens` — verified working via the API.
+The server defaults to `--reasoning-effort medium`; it also accepts `reasoning_effort` per request
+(`low`/`medium`/`high`/`xhigh`/`none`) and `reasoning_budget_tokens` — verified working via the API.
 
 ## Known Issues & Lessons Learned
 

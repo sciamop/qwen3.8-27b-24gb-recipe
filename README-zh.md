@@ -47,7 +47,7 @@
 
 ### 方式 B：手动安装
 
-1. **llama.cpp**（b10566，CUDA 13.3）：<https://github.com/ggml-org/llama.cpp/releases/download/b10566/llama-b10566-bin-win-cuda-13.3-x64.zip>
+1. **llama.cpp**（b10621，CUDA 13.3）：<https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-cuda-13.3-x64.zip>
    - 解压到 `llama-cpp/`
    - 注意：CUDA 12.4 版构建缺少 `cudart64_12.dll`/`cublas64_12.dll`，会静默回退到 CPU——**请使用 CUDA 13.3 版**。
 2. **模型**：`Qwen3.8-27B-UD-Q4_K_XL.gguf`（16.35 GB），来自 <https://huggingface.co/unsloth/Qwen3.8-27B-GGUF> → 放入 `models/`
@@ -72,8 +72,9 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 -ngl all --no-host
 -t 8 -ub 1024
 --spec-type draft-mtp
---spec-draft-poll 100
+--spec-draft-poll 1
 --no-reasoning-preserve
+--reasoning-effort medium
 --load-mode mmap+mlock
 --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
 --presence-penalty 0.0 --repeat-penalty 1.0
@@ -87,8 +88,9 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 | `--no-host` | 跳过 host buffer，释放额外设备缓冲；已验证无回归 |
 | `-t 8` | 显式 8 个 CPU 线程（给其他应用留 CPU 余量；自动检测在其他机器上可能用满逻辑核） |
 | `-c 131072` + KV q8_0 | 速度优先的稳定组合；160K/196K 在此卡上不稳定（见 FAQ） |
-| `--spec-draft-poll 100` | 异步草稿轮询，隐藏草稿延迟；想省 CPU 可降到 50 |
+| `--spec-draft-poll 1` | 开启异步草稿轮询，隐藏草稿延迟；布尔量（`0`/`1`），轮询档位跟随 `--poll` |
 | `--no-reasoning-preserve` | **显式**关闭历史思考痕迹保留。模板默认会保留、且 opencode 无条件回传 `reasoning_content`——只有该参数能真正丢弃思考链：会话更长、每轮增量 prefill 更快。当前轮思考仍正常流式输出 |
+| `--reasoning-effort medium` | 服务端默认思考深度（原为模板默认 `xhigh`）。思考更短 = 每轮延迟更低。可按请求用 `reasoning_effort` 覆盖 |
 | `--load-mode mmap+mlock` | 16.35 GB 权重常驻内存，防止换页重读 |
 | 采样参数 | Qwen3.8-27B 官方**思考模式**推荐值（temp 1.0 / top_p 0.95 / top_k 20 / min_p 0） |
 | `--temp 1.0` | 注意：温度越低 MTP 接受率越高、速度越快（temp 0 约 42–53 tok/s，temp 1.0 约 38 tok/s） |
@@ -106,7 +108,7 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 
 ## 性能基准
 
-硬件：RTX A5000（24564 MiB）、Ryzen 7 5800X、DDR4-3600、llama.cpp b10566、`benchmark.ps1`。
+硬件：RTX A5000（24564 MiB）、Ryzen 7 5800X、DDR4-3600、llama.cpp b10621、`benchmark.ps1`。
 
 | 场景 | 结果 |
 |---|---|
@@ -138,15 +140,21 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
           "name": "Qwen3.8-27B (Local)",
           "tool_call": true,
           "reasoning": true,
-          "limit": { "context": 131072, "output": 65536 }
+          "limit": { "context": 131072, "input": 131072, "output": 65536 }
         }
       }
     }
+  },
+  // 在 128K 硬上限前约 16K 处触发压缩（opencode 默认约 32K 余量）
+  "compaction": { "reserved": 16000 },
+  // 可选：把压缩交给云端模型，而不是本地 GPU
+  "agent": {
+    "compaction": { "model": "deepseek/deepseek-v4-flash" }
   }
 }
 ```
 
-服务端还支持按请求传入 `reasoning_effort`（`low`/`medium`/`high`/`xhigh`/`none`）和 `reasoning_budget_tokens`——已通过 API 实测验证。
+服务端默认 `--reasoning-effort medium`；仍可按请求传入 `reasoning_effort`（`low`/`medium`/`high`/`xhigh`/`none`）与 `reasoning_budget_tokens`——已通过 API 实测验证。
 
 ## 已知问题与经验教训
 

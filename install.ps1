@@ -5,7 +5,7 @@
     Qwen3.8-27B A5000 单卡部署一键安装脚本。
 
 .DESCRIPTION
-    Downloads llama.cpp (b10566, CUDA 13.3) and the Qwen3.8-27B GGUF model,
+    Downloads llama.cpp (b10621, CUDA 13.3) and the Qwen3.8-27B GGUF model,
     then prepares the llama-cpp/ and models/ directories.
     下载 llama.cpp 引擎与模型权重，准备 llama-cpp/ 与 models/ 目录。
 
@@ -33,7 +33,7 @@ param(
     [switch]$SkipModel,
     [string]$Proxy = "",
     [switch]$Force,
-    [string]$LlamaCppUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b10566/llama-b10566-bin-win-cuda-13.3-x64.zip",
+    [string]$LlamaCppUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-cuda-13.3-x64.zip",
     [string]$ModelUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q4_K_XL.gguf"
 )
 
@@ -81,12 +81,12 @@ if ($Proxy) {
 }
 
 # ---------- Step 2: download llama.cpp ----------
-Write-Step "Downloading llama.cpp (b10566, CUDA 13.3)..." "下载 llama.cpp 引擎（b10566, CUDA 13.3）..."
+Write-Step "Downloading llama.cpp (b10621, CUDA 13.3)..." "下载 llama.cpp 引擎（b10621, CUDA 13.3）..."
 New-Item -ItemType Directory -Path $llamaCppDir -Force | Out-Null
 if ((Test-Path $llamaServerExe) -and -not $Force) {
     Write-Info "llama-server.exe already exists, skipping. (use -Force to re-download)" "已存在 llama-server.exe，跳过（-Force 强制重下）"
 } else {
-    $zip = Join-Path $env:TEMP "llama-b10566-bin-win-cuda-13.3-x64.zip"
+    $zip = Join-Path $env:TEMP "llama-b10621-bin-win-cuda-13.3-x64.zip"
     $curlArgs = @("-L", "-C", "-", "--retry", "5", "--retry-all-errors", "--fail", "-o", $zip, $LlamaCppUrl)
     if ($Proxy) { $curlArgs = @("-x", $Proxy) + $curlArgs }
     & curl.exe @curlArgs
