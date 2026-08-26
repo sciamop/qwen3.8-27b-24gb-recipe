@@ -112,14 +112,14 @@ powershell -ExecutionPolicy Bypass -File .\verify-server.ps1
 
 | 场景 | 结果 |
 |---|---|
-| Prompt 处理（2K / 4K 未缓存） | 936 / 964 tok/s |
-| 生成（短上下文，temp 1.0） | 34–48 tok/s（MTP 开启，波动来自接受率） |
+| Prompt 处理（2K / 4K 未缓存） | 950 / 973 tok/s |
+| 生成（短上下文，temp 1.0） | ~38–40 tok/s（MTP 开启，波动来自接受率） |
 | 生成（temp 0 贪婪） | ~41.7 tok/s（代码类最高 52.7） |
-| 生成 @64K 上下文 | ~27 tok/s |
-| 生成 @128K 上下文 | ~23–28 tok/s（波动来自 MTP 接受率） |
-| TTFT（短 prompt） | 0.2–0.4 s |
+| 生成 @64K 上下文 | ~35 tok/s（约 62% 接受率） |
+| 生成 @128K 上下文 | ~32 tok/s（约 69% 接受率） |
+| TTFT（短 prompt） | ≈0.3 s |
 | TTFT @64K / @128K（真 64K/128K） | ~86 s / ~218 s |
-| 显存 | 23.3 / 24.6 GiB |
+| 显存 | ~23.2 GiB |
 | MTP 接受率 | temp 0：55–75%；temp 1.0：48–62% |
 
 无 MTP 基线：~32 tok/s。**MTP 收益：+30–65%。**

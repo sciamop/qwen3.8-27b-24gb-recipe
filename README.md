@@ -112,14 +112,14 @@ Hardware: RTX A5000 (24564 MiB), Ryzen 7 5800X, DDR4-3600, llama.cpp b10621, `be
 
 | Scenario | Result |
 |---|---|
-| Prompt eval (2K / 4K, uncached) | 936 / 964 tok/s |
-| Generation (short context, temp 1.0) | 34–48 tok/s (MTP on; variance from acceptance) |
+| Prompt eval (2K / 4K, uncached) | 950 / 973 tok/s |
+| Generation (short context, temp 1.0) | ~38–40 tok/s (MTP on; variance from acceptance) |
 | Generation (temp 0 / greedy) | ~41.7 tok/s (code up to 52.7) |
-| Generation @64K context | ~27 tok/s |
-| Generation @128K context | ~23–28 tok/s (variance from MTP acceptance) |
-| TTFT (short prompt) | 0.2–0.4 s |
+| Generation @64K context | ~35 tok/s (~62% acceptance) |
+| Generation @128K context | ~32 tok/s (~69% acceptance) |
+| TTFT (short prompt) | ≈0.3 s |
 | TTFT @64K / @128K (true 64K/128K) | ~86 s / ~218 s |
-| VRAM | 23.3 / 24.6 GiB |
+| VRAM | ~23.2 GiB |
 | MTP acceptance | temp 0: 55–75%; temp 1.0: 48–62% |
 
 Baseline without MTP: ~32 tok/s. **MTP gain: +30–65%.**
