@@ -124,6 +124,31 @@ Hardware: RTX A5000 (24564 MiB), Ryzen 7 5800X, DDR4-3600, llama.cpp b10621, `be
 
 Baseline without MTP: ~32 tok/s. **MTP gain: +30–65%.**
 
+## Vision offload (llambada build)
+
+`start-llambada.ps1` runs the llamAmpere fork (successor of [llama-cpp-qwen-ampere](https://github.com/JakeATX/llama-cpp-qwen-ampere)) (turbo3 V cache) text-only, and `vision-proxy.py` gives it vision by borrowing a small vision model on another machine. Dropping the 27B's own projector (`--no-mmproj`, ~0.9 GB plus its compute buffer) took context from 131K to **168K** (`-c 172032`).
+
+```
+clients ──► :8080  vision-proxy.py ── images ──► remote vision model (OpenAI-compatible)
+                       │  image parts replaced by its text description
+                       ▼
+                 127.0.0.1:8079  llama-server (27B, --no-mmproj)
+```
+
+- Everything passes through unchanged except chat requests with images: OpenAI `image_url` parts (`/v1/chat/completions`) and Anthropic `image` blocks (`/v1/messages`, including inside `tool_result`). Streaming is relayed as-is.
+- Each image is described once, without the conversation, and cached by hash, so a resent history produces identical text and the 27B's prompt cache stays valid.
+- If the vision model is unreachable, the image becomes a short "could not be described" note; the request still succeeds.
+- `/props` reports `vision: true` so clients that check it will send images.
+- **Trade-off:** the 27B reasons over a description, never the pixels. A new image adds the vision model's latency (~10–15 s for a 4B).
+
+The server binds loopback only so nothing on the LAN can bypass the proxy. `local/autostart.ps1` (the `llama-server-qwen38` scheduled task) starts the proxy, then the server; the proxy runs on a Python that has an inbound firewall rule.
+
+| Measured (UD-Q4_K_XL, RTX 4090, temp 1.0, real C++ prompts) | |
+|---|---|
+| Decode @ ~6K / ~83K context (with vision, before the switch) | 87–94 / 80–83 tok/s |
+| 160K-token prompt filled, `-c 172032` | peak 23,738 / 24,564 MiB; prefill 1,243 tok/s; decode 52.7 tok/s |
+| First-time image / cached image | 13.9 s / 0.4 s end to end |
+
 ## opencode Integration
 
 ```jsonc
