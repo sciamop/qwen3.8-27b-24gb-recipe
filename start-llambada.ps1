@@ -51,7 +51,7 @@ $ErrorActionPreference = "Stop"
 #                    config ran on for weeks.
 #   --no-mmproj      Vision is NOT loaded here. Images are handled by
 #                    vision-proxy.py, which owns the public port 8080, sends each
-#                    image to the 4B vision model on .76, and hands this server a
+#                    image to the 4B vision model on the vision box, and hands this server a
 #                    text description instead. Dropping the projector (~0.9 GB
 #                    plus its compute buffer) is what bought 131K -> 168K.
 #   --host 127.0.0.1 --port 8079
@@ -108,7 +108,7 @@ Write-Host "Starting llambada (llamAmpere)..." -ForegroundColor Cyan
 Write-Host "  Model:   $modelFile" -ForegroundColor Gray
 Write-Host "  Context: 172032, K q8_0 / V turbo3, FA on, MTP-3 + 64K vocab shortlist" -ForegroundColor Gray
 Write-Host "  Idle:    unloads after 180s, reloads on next request" -ForegroundColor Gray
-Write-Host "  Vision:  none here -- vision-proxy.py on :8080 describes images via .76" -ForegroundColor Gray
+Write-Host "  Vision:  none here -- vision-proxy.py on :8080 describes images via the vision box" -ForegroundColor Gray
 Write-Host "  Listen:  127.0.0.1:8079 (behind vision-proxy.py)" -ForegroundColor Gray
 Write-Host "  Measured: ~75 tok/s on real code at 123K context" -ForegroundColor Gray
 

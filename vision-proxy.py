@@ -19,7 +19,7 @@ vision model leaves out is gone.
 
 Standard library only. Run with the firewall-allowed interpreter, e.g.
     python vision-proxy.py --listen 0.0.0.0:8080 --upstream 127.0.0.1:8079 \
-        --vision-url http://192.168.68.76:8080/v1 --vision-model qwen3.5:4b-vision
+        --vision-url http://<vision-host>:8080/v1 --vision-model qwen3.5:4b-vision
 """
 
 import argparse
