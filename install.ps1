@@ -34,6 +34,7 @@ param(
     [string]$Proxy = "",
     [switch]$Force,
     [string]$LlamaCppUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b10621/llama-b10621-bin-win-cuda-13.3-x64.zip",
+    [string]$CudartUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b10621/cudart-llama-bin-win-cuda-13.3-x64.zip",
     [string]$ModelUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q4_K_XL.gguf"
 )
 
@@ -95,6 +96,24 @@ if ((Test-Path $llamaServerExe) -and -not $Force) {
     Expand-Archive -Path $zip -DestinationPath $llamaCppDir -Force
     Remove-Item $zip -Force -ErrorAction SilentlyContinue
     if (-not (Test-Path $llamaServerExe)) { Write-Error "llama-server.exe missing after extraction. / 解压后未找到 llama-server.exe。" }
+
+    # The engine zip does NOT bundle the CUDA runtime. Without cudart64_13.dll /
+    # cublas64_13.dll / cublasLt64_13.dll, ggml-cuda.dll fails to load and llama.cpp
+    # silently falls back to CPU (~10x slower, no error message). Fetch it explicitly.
+    # 引擎压缩包不含 CUDA 运行时；缺少这些 DLL 时会静默回退到 CPU（慢约 10 倍且无报错）。
+    Write-Info "Downloading CUDA runtime (cudart)..." "下载 CUDA 运行时..."
+    $cudartZip = Join-Path $env:TEMP "cudart-llama-bin-win-cuda-13.3-x64.zip"
+    $cudartArgs = @("-L", "-C", "-", "--retry", "5", "--retry-all-errors", "--fail", "-o", $cudartZip, $CudartUrl)
+    if ($Proxy) { $cudartArgs = @("-x", $Proxy) + $cudartArgs }
+    & curl.exe @cudartArgs
+    if ($LASTEXITCODE -ne 0) { Write-Error "CUDA runtime download failed (exit $LASTEXITCODE). / CUDA 运行时下载失败。" }
+    Expand-Archive -Path $cudartZip -DestinationPath $llamaCppDir -Force
+    Remove-Item $cudartZip -Force -ErrorAction SilentlyContinue
+}
+
+# Fail loudly rather than silently running on CPU. / 宁可报错，也不要静默回退到 CPU。
+if (-not (Test-Path (Join-Path $llamaCppDir "cublas64_13.dll"))) {
+    Write-Error "cublas64_13.dll missing - llama.cpp would silently fall back to CPU. Re-run with -Force. / 缺少 cublas64_13.dll，llama.cpp 会静默回退到 CPU，请用 -Force 重新安装。"
 }
 
 # ---------- Step 3: download model ----------
